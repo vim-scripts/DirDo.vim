@@ -1,0 +1,9 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=367
+
+This plugin is like :argdo but it works recursively under a directory (or
+multiple directories).  The limitation for :argdo is that it does not glob
+the files inside the subdirectories.  DirDo works in a similar manner but
+you're allowed to specify multiple directories (good for refactoring code
+and modifying files in a deep hierarchy).  DirDo also globs the files in
+the subdirectories so you can make sure an operation is performed
+consistantly.
