@@ -1,7 +1,7 @@
 " -*- vim -*-
-" FILE: "H:\vim\vimfiles\plugin\DirDo.vim" {{{
-" LAST MODIFICATION: "Wed, 07 Aug 2002 16:48:10 Pacific Daylight Time (wlee)"
-" VERSION: 1.0
+" FILE: "/home/wlee/vim/vimfiles/plugin/DirDo.vim" {{{
+" LAST MODIFICATION: "Mon, 19 Aug 2002 16:39:00 -0700 (wlee)"
+" VERSION: 1.1
 " (C) 2002 by William Lee, <wlee@sendmail.com>
 " }}}
 " 
@@ -37,6 +37,18 @@
 "   If no argument is given, then it'll display the directories that you're
 "   going to work on and let you edit them by separating them with commas
 "   (',')
+"
+"   You can also use the following command to add a directory to the DirDoDir
+"   variable:
+"
+"       :DirDoAdd /my/dir
+"
+"       or
+"
+"       :DDA /my/dir
+"
+"   If you do not give an argument to DDA, it'll add the current working
+"   directory to the DirDoDir variable.
 "
 "   Then we set the file glob pattern
 "
@@ -117,6 +129,7 @@
 "
 " HISTORY:
 "  1.0  - 8/7/2002 Initial release
+"  1.1  - 8/19/2002 Added DirDoAdd command to add directory
 "
 
 " Mappings
@@ -128,6 +141,9 @@ command! -nargs=0 DirDoVerbose call <SID>DirDoVerbose()
 
 command! -nargs=* -complete=dir DDD call <SID>DirDoDir(<f-args>)
 command! -nargs=* -complete=dir DirDoDir call <SID>DirDoDir(<f-args>)
+
+command! -nargs=* -complete=dir DDA call <SID>DirDoAdd(<f-args>)
+command! -nargs=* -complete=dir DirDoAdd call <SID>DirDoAdd(<f-args>)
 
 command! -nargs=* DDP call <SID>DirDoPattern(<f-args>)
 command! -nargs=* DirDoPattern call <SID>DirDoPattern()
@@ -173,6 +189,36 @@ fun! <SID>DirDoDir(...)
     else
         " Edit the directories
         let g:DirDoDir = input ("Set DirDo directories (use ',' to separate multiple entries): " , g:DirDoDir)
+    endif
+endfun
+
+" Adds to the DirDo directory
+fun! <SID>DirDoAdd(...)
+    " Constructs the arguments as a comma separated list
+    if (a:0 != 0)
+        let ctr = 1
+        let add_dir = ""
+        while (ctr <= a:0)
+            if (add_dir != "")
+                let add_dir = add_dir . ','
+            endif
+            let add_dir = add_dir . a:{ctr}
+            let ctr = ctr + 1
+        endwhile
+        if (g:DirDoDir == "")
+            let g:DirDoDir = add_dir
+        else
+            let g:DirDoDir = g:DirDoDir . ',' . add_dir
+        endif
+    else
+        " Add the current directory of the current file to the DirDo Path
+        let c_dir = getcwd()
+        echo ("Adding to DirDoDir: " . c_dir)
+        if (g:DirDoDir == "")
+            let g:DirDoDir = c_dir
+        else
+            let g:DirDoDir = g:DirDoDir . ',' . c_dir
+        endif
     endif
 endfun
 
