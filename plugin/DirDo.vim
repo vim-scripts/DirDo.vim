@@ -1,8 +1,8 @@
 " -*- vim -*-
 " FILE: "/home/wlee/vim/vimfiles/plugin/DirDo.vim" {{{
-" LAST MODIFICATION: "Mon, 19 Aug 2002 16:39:00 -0700 (wlee)"
-" VERSION: 1.1
-" (C) 2002 by William Lee, <wlee@sendmail.com>
+" LAST MODIFICATION: "Thu, 12 Jun 2003 16:05:11 -0700 (wlee)"
+" VERSION: 1.2
+" (C) 2002-2003 by William Lee, <wlee@sendmail.com>
 " }}}
 " 
 " PURPOSE: {{{
@@ -41,11 +41,11 @@
 "   You can also use the following command to add a directory to the DirDoDir
 "   variable:
 "
-"       :DirDoAdd /my/dir
+"       :DirDoAdd [/my/dir]
 "
 "       or
 "
-"       :DDA /my/dir
+"       :DDA [/my/dir]
 "
 "   If you do not give an argument to DDA, it'll add the current working
 "   directory to the DirDoDir variable.
@@ -92,6 +92,29 @@
 "
 "       :DDO %s/Bar/Baz/ge | update
 "
+"   (Since 1.2) There is a command called DirDoFast where you can set the
+"   directory, pattern, and command at once.  Note that your arguments need to
+"   be escaped if there is an space to it, otherwise Vim will break up the
+"   arguments incorrectly.  The syntax is:
+"
+"       :DirDoFast [directories] [patterns] command
+"
+"       or
+"
+"       :DDF [directories] [patterns] command
+"
+"   Multiple directories need to be separated by comma.  Patterns need to be
+"   separated by spaces.  Since space is used by Vim to separate the command
+"   arguments, ALL spaces in the directory, pattern, or command need to be
+"   escaped.  For example, the last command using DDF would look like:
+"
+"   :DDF /my/directory *.java\ *.c %s/Foo/Bar/gce\ |\ update
+"
+"   If you only give 2 arguments to :DDF, you assume the directory is set to
+"   ".".
+"
+"   If you only give 1 argument to :DDF, you assume the directory is set to
+"   "." and the pattern is set to "*".
 "
 "   There is an option to run DirDo with less verbosity, to toggle the
 "   setting, run:
@@ -123,18 +146,28 @@
 "
 "   Please mail any comment/suggestion/patch to 
 "
-"   William Lee <wlee@sendmail.com>
+"   William Lee <wl1012@yahoo.com>
 "
-"   (c) 2002. This script is under the same copyright as Vim itself.
+"   (c) 2002-2003. This script is under the same copyright as Vim itself.
+"
+" THANKS:
+"
+"   Lijian Liu for reporting numerous bugs.
 "
 " HISTORY:
 "  1.0  - 8/7/2002 Initial release
 "  1.1  - 8/19/2002 Added DirDoAdd command to add directory
+"  1.2  - 6/12/2003 Added the DirDoFast command so you can set directory,
+"  pattern, and command at once.  Fixed bug where the unix hidden file will
+"  not show up in the file list.  Fixed bug where ~ in the path does not work.
 "
 
 " Mappings
 command! -nargs=* DDO call <SID>DirDo(<f-args>)
 command! -nargs=* DirDo call <SID>DirDo(<f-args>)
+
+command! -nargs=* DDF call <SID>DirDoFast(<f-args>)
+command! -nargs=* DirDoFast call <SID>DirDoFast(<f-args>)
 
 command! -nargs=0 DDV call <SID>DirDoVerbose()
 command! -nargs=0 DirDoVerbose call <SID>DirDoVerbose()
@@ -258,6 +291,66 @@ fun! <SID>TrimStr(str)
     return rtn
 endfun
 
+" A one line command that does it all
+fun! <SID>DirDoFast(...)
+    if (a:0 == 3)
+        let g:DirDoDir = a:1
+        let g:DirDoPattern = a:2
+        let cmd = a:3
+    elseif (a:0 == 2)
+        let g:DirDoDir = "."
+        let g:DirDoPattern = a:1
+        let cmd = a:2
+    elseif (a:0 == 1)
+        let g:DirDoDir = "."
+        let g:DirDoPattern = "*"
+        let cmd = a:1
+    else
+        echo "Error: Missing argument for: DirDoFast \"[dir]\" \"[patterns]\" \"[cmd]\" "
+        return
+    endif
+
+    if (cmd == "")
+        echo "You have to specify a command for DirDo!"
+        return 1
+    endif
+
+    echo "Directories: " . g:DirDoDir
+    echo "Glob Pattern: " . g:DirDoPattern
+    echo "Command: " . cmd
+    let in = confirm("Run DirDo?", "&Yes\n&No", 1)
+    if (in != 1)
+        return 0
+    endif
+
+    let s:MatchRegexPattern = <SID>GetRegExPattern()
+    echo "MatchRegexPattern is " . s:MatchRegexPattern
+    let currPaths = <SID>TrimStr(g:DirDoDir)
+    " See if currPaths has a ',' at the end, if not, we add it.
+        "echo "currPaths begin is " . currPaths
+    if (match(currPaths, ',$') == -1)
+        let currPaths = currPaths . ','
+    endif
+
+    let fileCount = 0
+
+    while (currPaths != "")
+        let sepIdx = stridx(currPaths, ",")
+        " Gets the substring exluding the newline
+        let currPath = strpart(currPaths, 0, sepIdx)
+        let currPath = <SID>TrimStr(currPath)
+        let currPath = fnamemodify(expand(currPath, ":p"), ":p")
+        if (s:Verbose == 1)
+            echo "Applying command recursively in root path: " . currPath . " ..."
+        endif
+        let currPaths = strpart(currPaths, sepIdx + 1, strlen(currPaths) - sepIdx - 1)
+        let fileCount = fileCount + <SID>DirDoHlp(currPath, cmd)
+    endwhile
+    " Reset the argument list
+    argl
+    echo "Done.  Applied command on " . fileCount . " files."
+endfun
+
 " Recursively apply the commands to the list of directories in DirDoDir
 fun! <SID>DirDo(...)
     " Update the AskFile to true
@@ -282,45 +375,7 @@ fun! <SID>DirDo(...)
     else
         let cmd = s:LastCommand
     endif
-
-    echo "Directories: " . g:DirDoDir
-    echo "Glob Pattern: " . g:DirDoPattern
-
-    if (cmd == "")
-        echo "You have to specify a command for DirDo!"
-        return 1
-    endif
-
-    echo "Command: " . cmd
-    let in = confirm("Run DirDo?", "&Yes\n&No", 1)
-    if (in != 1)
-        return 0
-    endif
-
-    let s:MatchRegexPattern = <SID>GetRegExPattern()
-    let currPaths = <SID>TrimStr(g:DirDoDir)
-    " See if currPaths has a ',' at the end, if not, we add it.
-        "echo "currPaths begin is " . currPaths
-    if (match(currPaths, ',$') == -1)
-        let currPaths = currPaths . ','
-    endif
-
-    let fileCount = 0
-
-    while (currPaths != "")
-        let sepIdx = stridx(currPaths, ",")
-        " Gets the substring exluding the newline
-        let currPath = strpart(currPaths, 0, sepIdx)
-        let currPath = <SID>TrimStr(currPath)
-        if (s:Verbose == 1)
-            echo "Applying command recursively in root path: " . currPath . " ..."
-        endif
-        let currPaths = strpart(currPaths, sepIdx + 1, strlen(currPaths) - sepIdx - 1)
-        let fileCount = fileCount + <SID>DirDoHlp(currPath, cmd)
-    endwhile
-    " Reset the argument list
-    argl
-    echo "Done.  Applied command on " . fileCount . " files."
+    call <SID>DirDoFast(g:DirDoDir, g:DirDoPattern, cmd)
 endfun
 
 " Turns the global glob pattens into a regex pattern
@@ -346,6 +401,10 @@ endfun
 " The helper function to apply the command to a directory
 fun! <SID>DirDoHlp(cpath, cmd)
     "echo "Arguments " . a:cpath . " cmd is " . a:cmd
+    "we would like to ignore path that ends with [\/].. and [\/].
+    if (match(a:cpath, '\([\\/]\.$\|[\\/]\.\.$\|^\.\.$\|^\.$\)') > -1)
+        return 0
+    endif
     if (!isdirectory(a:cpath) && match(a:cpath, s:MatchRegexPattern) > -1)
         let i = 1
         if (s:CancelFile == 1)
@@ -372,6 +431,10 @@ fun! <SID>DirDoHlp(cpath, cmd)
         if (isdirectory(a:cpath))
             let files = glob(a:cpath . "/*")
             let files = files . "\n"
+            " we would like to get the hidden files also
+            let hfiles = glob(a:cpath . "/.*")
+            let hfiles = hfiles . "\n"
+            let files = files . hfiles
 
             let fileCtr = 0
             while (files != "" && files !~ '\n$')
