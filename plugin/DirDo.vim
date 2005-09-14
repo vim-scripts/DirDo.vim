@@ -1,8 +1,8 @@
 " -*- vim -*-
-" FILE: "/home/wlee/vim/vimfiles/plugin/DirDo.vim" {{{
-" LAST MODIFICATION: "Thu, 12 Jun 2003 16:05:11 -0700 (wlee)"
-" VERSION: 1.2
-" (C) 2002-2003 by William Lee, <wlee@sendmail.com>
+" FILE: "/home/wlee/.vim/plugin/DirDo.vim" {{{
+" LAST MODIFICATION: "Wed, 14 Sep 2005 14:42:44 -0500 (wlee)"
+" VERSION: 1.3
+" (C) 2002-2005 by William Lee, <wl1012@yahoo.com>
 " }}}
 " 
 " PURPOSE: {{{
@@ -116,6 +116,20 @@
 "   If you only give 1 argument to :DDF, you assume the directory is set to
 "   "." and the pattern is set to "*".
 "
+"   (Since 1.3) There is a command called DirReplace that simplifies the
+"   multi-directory string replace procedure.  Essentially, it is the same
+"   as executing DirDoFast with a directory, pattern, and command (as 
+"   s/[regex_pattern]/[replacement/gce | update).
+"
+"       :DirReplace
+"
+"       or
+"
+"       :DR
+"
+"   You will be asked for the directories, glob patterns, regex string, and
+"   the replacement.
+"
 "   There is an option to run DirDo with less verbosity, to toggle the
 "   setting, run:
 "
@@ -152,14 +166,15 @@
 "
 " THANKS:
 "
-"   Lijian Liu for reporting numerous bugs.
+"   Lijian Liu and Thomas Nickl for reporting numerous bugs.
 "
 " HISTORY:
-"  1.0  - 8/7/2002 Initial release
-"  1.1  - 8/19/2002 Added DirDoAdd command to add directory
+"  1.3  - 9/14/2005 Added the DirReplace command
 "  1.2  - 6/12/2003 Added the DirDoFast command so you can set directory,
 "  pattern, and command at once.  Fixed bug where the unix hidden file will
 "  not show up in the file list.  Fixed bug where ~ in the path does not work.
+"  1.1  - 8/19/2002 Added DirDoAdd command to add directory
+"  1.0  - 8/7/2002 Initial release
 "
 
 " Mappings
@@ -168,6 +183,9 @@ command! -nargs=* DirDo call <SID>DirDo(<f-args>)
 
 command! -nargs=* DDF call <SID>DirDoFast(<f-args>)
 command! -nargs=* DirDoFast call <SID>DirDoFast(<f-args>)
+
+command! -nargs=* DR call <SID>DirReplace(<f-args>)
+command! -nargs=* DirReplace call <SID>DirReplace(<f-args>)
 
 command! -nargs=0 DDV call <SID>DirDoVerbose()
 command! -nargs=0 DirDoVerbose call <SID>DirDoVerbose()
@@ -205,6 +223,20 @@ let s:AskFile = 1
 " Ask to cancel the operation
 let s:CancelFile = 0
 
+" Convenience method to do a search and replace
+fun! <SID>DirReplace(...)
+    let ddd = input("Directories (use ',' to separate multiple entries): " , g:DirDoDir)
+    let ddp = input("Glob patterns (use ' ' to separate multiple entries): " , g:DirDoPattern)
+    let searchRegex = input("Search Regex: ")
+    let replaceStr = input("Replace with: ")
+    let cfm = confirm("Confirm each replace?", "&Yes\n&No", 1)
+    let setStr = "ge"
+    if (cfm == 1)
+        let setStr = "gce"
+    endif
+    let cmd = "s/" . searchRegex . "/" . replaceStr . "/" . setStr . "|update"
+    call <SID>DirDoFast(ddd, ddp, cmd, 0)
+endfun
 
 " Sets the directory
 fun! <SID>DirDoDir(...)
@@ -270,7 +302,7 @@ fun! <SID>DirDoPattern(...)
         endwhile
     else
         " Edits the pattern
-        let g:DirDoPattern = input ("Set DirDo glob patterns (use ' ' to separate multiple entries): " , g:DirDoPattern)
+        let g:DirDoPattern = input("Set DirDo glob patterns (use ' ' to separate multiple entries): " , g:DirDoPattern)
     endif
 endfun
 
@@ -293,18 +325,26 @@ endfun
 
 " A one line command that does it all
 fun! <SID>DirDoFast(...)
-    if (a:0 == 3)
+    if (a:0 == 4)
         let g:DirDoDir = a:1
         let g:DirDoPattern = a:2
         let cmd = a:3
+        let cfm = a:4
+    elseif (a:0 == 3)
+        let g:DirDoDir = a:1
+        let g:DirDoPattern = a:2
+        let cmd = a:3
+        let cfm = 1
     elseif (a:0 == 2)
         let g:DirDoDir = "."
         let g:DirDoPattern = a:1
         let cmd = a:2
+        let cfm = 1
     elseif (a:0 == 1)
         let g:DirDoDir = "."
         let g:DirDoPattern = "*"
         let cmd = a:1
+        let cfm = 1
     else
         echo "Error: Missing argument for: DirDoFast \"[dir]\" \"[patterns]\" \"[cmd]\" "
         return
@@ -318,9 +358,11 @@ fun! <SID>DirDoFast(...)
     echo "Directories: " . g:DirDoDir
     echo "Glob Pattern: " . g:DirDoPattern
     echo "Command: " . cmd
-    let in = confirm("Run DirDo?", "&Yes\n&No", 1)
-    if (in != 1)
-        return 0
+    if (cfm == 1)
+        let in = confirm("Run DirDo?", "&Yes\n&No", 1)
+        if (in != 1)
+            return 0
+        endif
     endif
 
     let s:MatchRegexPattern = <SID>GetRegExPattern()
@@ -406,6 +448,7 @@ fun! <SID>DirDoHlp(cpath, cmd)
         return 0
     endif
     if (!isdirectory(a:cpath) && match(a:cpath, s:MatchRegexPattern) > -1)
+        "echo "Is not dir... " . a:cpath
         let i = 1
         if (s:CancelFile == 1)
             return 0
@@ -435,13 +478,12 @@ fun! <SID>DirDoHlp(cpath, cmd)
             let hfiles = glob(a:cpath . "/.*")
             let hfiles = hfiles . "\n"
             let files = files . hfiles
-
             let fileCtr = 0
-            while (files != "" && files !~ '\n$')
-                let sepIdx = stridx(files, "\n")
-                " Gets the substring exluding the newline
-                let file = strpart(files, 0, sepIdx)
-                let files = strpart(files, sepIdx + 1, strlen(files) - sepIdx - 1)
+            "while (files != "" && files !~ '^\n+$')
+            while (files != "" && files != "\n")
+                let cut = stridx(files, "\n")
+                let file = strpart(files, 0, cut)
+                let files = strpart(files, cut+1)
                 let fileCtr = fileCtr + <SID>DirDoHlp(file, a:cmd)
             endwhile
             return fileCtr
